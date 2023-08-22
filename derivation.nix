@@ -34,6 +34,7 @@ in
     , nodejs ? nodePkg
     , pnpm ? nodejs.pkgs.pnpm
     , pkg-config ? pkgConfigPkg
+    , nodeModulesOverrideAttrs ? (final: prev: { })
     , ...
     }@attrs:
     let
@@ -102,7 +103,7 @@ in
               pnpm store add ${concatStringsSep " " (unique (dependencyTarballs { inherit registry; lockfile = pnpmLockYaml; }))}
             '';
 
-            nodeModules = stdenv.mkDerivation {
+            nodeModules = (stdenv.mkDerivation {
               name = "${name}-node-modules";
 
               inherit nativeBuildInputs;
@@ -144,7 +145,7 @@ in
               installPhase = ''
                 cp -r node_modules/. $out
               '';
-            };
+            }).overrideAttrs nodeModulesOverrideAttrs;
           };
 
         })

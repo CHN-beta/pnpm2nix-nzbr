@@ -34,7 +34,6 @@ in
     , nodejs ? nodePkg
     , pnpm ? nodejs.pkgs.pnpm
     , pkg-config ? pkgConfigPkg
-    , nodeModulesOverrideAttrs ? (final: prev: { })
     , ...
     }@attrs:
     let
@@ -103,27 +102,33 @@ in
               pnpm store add ${concatStringsSep " " (unique (dependencyTarballs { inherit registry; lockfile = pnpmLockYaml; }))}
             '';
 
-            nodeModules = (stdenv.mkDerivation {
+            nodeModules = stdenv.mkDerivation {
               name = "${name}-node-modules";
 
               inherit nativeBuildInputs;
 
               unpackPhase = concatStringsSep "\n"
                 (
-                  map
-                    (v:
-                      let
-                        nv = if isAttrs v then v else { name = "."; value = v; };
-                      in
-                      "cp -vr ${nv.value} ${nv.name}"
-                    )
-                    ([
-                      { name = "package.json"; value = packageJSON; }
-                      { name = "pnpm-lock.yaml"; value = passthru.patchedLockfileYaml; }
-                    ] ++ extraNodeModuleSources)
+                  [ "runHook preUnpack" ]
+                  ++ (
+                    map
+                      (v:
+                        let
+                          nv = if isAttrs v then v else { name = "."; value = v; };
+                        in
+                        "cp -vr ${nv.value} ${nv.name}"
+                      )
+                      ([
+                        { name = "package.json"; value = packageJSON; }
+                        { name = "pnpm-lock.yaml"; value = passthru.patchedLockfileYaml; }
+                      ] ++ extraNodeModuleSources)
+                  )
+                  ++ [ "runHook postUnpack" ]
                 );
 
               buildPhase = ''
+                runHook preBuild
+
                 export HOME=$NIX_BUILD_TOP # Some packages need a writable HOME
 
                 store=$(pnpm store path)
@@ -140,12 +145,16 @@ in
                 ${lib.optionalString copyPnpmStore "chmod -R +w $(pnpm store path)"}
 
                 pnpm install --frozen-lockfile --offline
+
+                runHook postBuild
               '';
 
               installPhase = ''
+                runHook preInstall
                 cp -r node_modules/. $out
+                runHook postInstall
               '';
-            }).overrideAttrs nodeModulesOverrideAttrs;
+            };
           };
 
         })

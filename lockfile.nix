@@ -26,8 +26,8 @@ let
             split = splitString "/" n;
           in
           fetchGit {
-            url = "https://${concatStringsSep "/" (init split)}.git";
-            rev = (last split);
+            url = "https://${concatStringsSep "/" (take 3 split)}.git";
+            rev = head (splitString "(" (builtins.elemAt split 3));
             shallow = true;
           };
     in

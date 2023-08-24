@@ -144,7 +144,7 @@ in
 
                 ${lib.optionalString copyPnpmStore "chmod -R +w $(pnpm store path)"}
 
-                pnpm install --frozen-lockfile --offline --prod
+                pnpm install --frozen-lockfile --offline
 
                 runHook postBuild
               '';

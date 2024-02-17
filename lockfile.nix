@@ -35,16 +35,18 @@ let
     runCommand "${last (init (splitString "/" (head (splitString "(" n))))}.tgz" { } ''
       tar -czf $out -C ${repo} .
     '';
+  urlTarball = { url, extraIntegritySha256 }:
+    fetchurl { inherit url; sha256 = extraIntegritySha256.${url}; };
 in
 rec {
 
   parseLockfile = lockfile: builtins.fromJSON (readFile (runCommand "toJSON" { } "${remarshal}/bin/yaml2json ${lockfile} $out"));
 
-  dependencyTarballs = { registry, lockfile }:
+  dependencyTarballs = { registry, lockfile, extraIntegritySha256 }:
     unique (
       mapAttrsToList
         (n: v:
-          if hasPrefix "/" n then
+          if hasPrefix "/" n then # fetch from registry
             let
               name = withoutVersion n;
               baseName = last (splitString "/" (withoutVersion n));
@@ -60,21 +62,25 @@ rec {
                   { sha512 = v.resolution.integrity; }
               )
             )
-          else
+          else if hasPrefix "@" n then # fetch from url
+            urlTarball { url = v.resolution.tarball; inherit extraIntegritySha256; }
+          else # fetch from git
             gitTarball n v
         )
         (parseLockfile lockfile).packages
     );
 
-  patchLockfile = lockfile:
+  patchLockfile = { pnpmLockYaml, extraIntegritySha256 }:
     let
-      orig = parseLockfile lockfile;
+      orig = parseLockfile pnpmLockYaml;
     in
     orig // {
       packages = mapAttrs
         (n: v:
           if hasPrefix "/" n
           then v
+          else if hasPrefix "@" n
+          then v // { resolution.tarball = "file:${urlTarball { inherit extraIntegritySha256; url = v.resolution.tarball; }}"; }
           else v // {
             resolution.tarball = "file:${gitTarball n v}";
           }

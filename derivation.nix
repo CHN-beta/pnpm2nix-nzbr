@@ -34,6 +34,7 @@ in
     , nodejs ? nodePkg
     , pnpm ? nodejs.pkgs.pnpm
     , pkg-config ? pkgConfigPkg
+    , extraIntegritySha256 ? {}
     , ...
     }@attrs:
     let
@@ -86,7 +87,7 @@ in
           passthru = {
             inherit attrs;
 
-            patchedLockfile = patchLockfile pnpmLockYaml;
+            patchedLockfile = patchLockfile { inherit pnpmLockYaml extraIntegritySha256; };
             patchedLockfileYaml = writeText "pnpm-lock.yaml" (toJSON passthru.patchedLockfile);
 
             pnpmStore = runCommand "${name}-pnpm-store"
@@ -99,7 +100,7 @@ in
               mkdir -p $(dirname $store)
               ln -s $out $(pnpm store path)
 
-              pnpm store add ${concatStringsSep " " (unique (dependencyTarballs { inherit registry; lockfile = pnpmLockYaml; }))}
+              pnpm store add ${concatStringsSep " " (unique (dependencyTarballs { inherit registry extraIntegritySha256; lockfile = pnpmLockYaml; }))}
             '';
 
             nodeModules = stdenv.mkDerivation {
